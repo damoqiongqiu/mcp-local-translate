@@ -1,0 +1,89 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.damoqiongqiu/mcp-local-translate",
+  "description": "Local NLLB translation for 200+ languages. Zero cloud, zero cost, runs entirely on your machine.",
+  "version": "0.1.0",
+  "vendor": "damoqiongqiu",
+  "license": "MIT",
+  "repository": {
+    "url": "https://github.com/damoqiongqiu/mcp-local-translate",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@damoqiongqiu/mcp-local-translate",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "HF_ENDPOINT",
+          "description": "HuggingFace endpoint override for downloading models (e.g. https://hf-mirror.com for China).",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "HF_AUTO_MIRROR",
+          "description": "Auto-detect HuggingFace mirror for China. Set to '0' or 'false' to disable.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "CACHE_DIR",
+          "description": "Directory where Transformers.js models are cached (defaults to ./models/).",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "TRANSLATE_DEVICE",
+          "description": "Execution device: 'cpu' (default) or 'webgpu' for GPU acceleration.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "HTTPS_PROXY",
+          "description": "Proxy URL for model downloads. Also supports HTTP_PROXY and lowercase variants.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        }
+      ],
+      "features": {
+        "tools": {
+          "supported": true,
+          "list": [
+            "translate",
+            "list_languages"
+          ]
+        },
+        "prompts": {
+          "supported": false
+        },
+        "resources": {
+          "supported": false
+        }
+      }
+    }
+  ],
+  "tags": [
+    "translation",
+    "nllb",
+    "transformers",
+    "local-ai",
+    "offline",
+    "privacy",
+    "multilingual",
+    "200-languages",
+    "cpu-only",
+    "ai-assistant"
+  ],
+  "homepage": "https://github.com/damoqiongqiu/mcp-local-translate",
+  "documentation": "https://github.com/damoqiongqiu/mcp-local-translate#readme"
+}
