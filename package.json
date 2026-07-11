@@ -65,6 +65,9 @@
     "vitest": "^4.1.9"
   },
   "packageManager": "pnpm@11.9.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "onnxruntime-node", "protobufjs", "sharp"]
+  },
   "engines": {
     "node": ">=22"
   },
