@@ -66,7 +66,7 @@ jobs:
         SMOKE_DIR="$(mktemp -d)"
         cd "$SMOKE_DIR"
         npm init -y >/dev/null
-        npm install "${RUNNER_TEMP}"/mcp-local-translate-*.tgz
+        npm install "${RUNNER_TEMP}"/damoqiongqiu-mcp-local-translate-*.tgz
         node -e "
           // Verify the package loads without errors
           const pkg = require('@damoqiongqiu/mcp-local-translate/package.json');

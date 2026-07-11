@@ -1,9 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import {
-  resolveLanguageCode,
-  searchLanguage,
-  getAllLanguages,
-} from '../language-codes.js'
+import { describe, expect, it } from 'vitest'
+import { getAllLanguages, resolveLanguageCode, searchLanguage } from '../language-codes.js'
 
 describe('language-codes', () => {
   describe('resolveLanguageCode', () => {

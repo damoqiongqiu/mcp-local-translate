@@ -5,19 +5,19 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
+  type CallToolRequest,
   CallToolRequestSchema,
   ListToolsRequestSchema,
-  type CallToolRequest,
 } from '@modelcontextprotocol/sdk/types.js'
 import { Translator, type TranslatorConfig } from '../translator/index.js'
 import {
-  resolveLanguageCode,
-  searchLanguage,
   formatCandidates,
   getAllLanguages,
+  resolveLanguageCode,
+  searchLanguage,
 } from '../translator/language-codes.js'
 import { detectLanguage } from '../translator/language-detect.js'
-import { TRANSLATE_TOOL, LIST_LANGUAGES_TOOL } from './types.js'
+import { LIST_LANGUAGES_TOOL, TRANSLATE_TOOL } from './types.js'
 
 // ============================================
 // TranslateServer

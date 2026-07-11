@@ -44,7 +44,13 @@ jobs:
         run: pnpm build
 
       - name: Publish to npm
-        run: npm publish
+        run: |
+          # IMPORTANT: The NPM_TOKEN secret must be an Automation-type token
+          # (not a Publish-type token). Publish tokens require 2FA OTP which
+          # cannot be provided in CI. Create one at:
+          #   https://www.npmjs.com/settings/<user>/tokens
+          # Type: "Automation" — this bypasses 2FA for CI/CD use.
+          npm publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

@@ -1,17 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import {
-  probeEndpoint,
-  probeApiEndpoint,
-  resolveEndpoint,
-  MIRROR_CHAIN,
-} from '../connectivity.js'
-
-// Types for MirrorConfig
-interface MirrorConfig {
-  url: string
-  pathTemplate: string
-  urlStyle: 'hf-hub' | 'modelscope'
-}
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { MIRROR_CHAIN, probeEndpoint, resolveEndpoint } from '../connectivity.js'
 
 describe('connectivity', () => {
   describe('MIRROR_CHAIN', () => {
@@ -38,25 +26,19 @@ describe('connectivity', () => {
     })
 
     it('returns true when host is reachable', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-        new Response(null, { status: 200 })
-      )
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 200 }))
       const result = await probeEndpoint('https://example.com')
       expect(result).toBe(true)
     })
 
     it('returns true even on 4xx responses (host reachable)', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-        new Response(null, { status: 404 })
-      )
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 404 }))
       const result = await probeEndpoint('https://example.com')
       expect(result).toBe(true)
     })
 
     it('returns false when fetch fails', async () => {
-      vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(
-        new Error('connect ECONNREFUSED')
-      )
+      vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('connect ECONNREFUSED'))
       const result = await probeEndpoint('https://unreachable.example.com')
       expect(result).toBe(false)
     })
@@ -102,7 +84,6 @@ describe('connectivity', () => {
 
     it('selects primary when it is reachable and API works', async () => {
       // Mock: HEAD succeeds
-      // Mock: HEAD succeeds
       vi.spyOn(globalThis, 'fetch')
         .mockResolvedValueOnce(new Response(null, { status: 200 })) // HEAD probe
         .mockResolvedValueOnce(
@@ -136,9 +117,7 @@ describe('connectivity', () => {
     })
 
     it('returns apiComplete=false and diagnostic when all mirrors fail', async () => {
-      vi.spyOn(globalThis, 'fetch').mockRejectedValue(
-        new Error('unreachable')
-      )
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unreachable'))
 
       const result = await resolveEndpoint({})
       expect(result.endpoint).toBe('https://huggingface.co')

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { detectLanguage } from '../language-detect.js'
 
 describe('language-detect', () => {
@@ -11,9 +11,7 @@ describe('language-detect', () => {
     })
 
     it('detects Chinese (Simplified)', () => {
-      const result = detectLanguage(
-        '人工智能正在改变世界。深度学习模型可以理解和生成人类语言。'
-      )
+      const result = detectLanguage('人工智能正在改变世界。深度学习模型可以理解和生成人类语言。')
       expect(result).toBe('zho_Hans')
     })
 

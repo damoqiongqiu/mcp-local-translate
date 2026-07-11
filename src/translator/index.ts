@@ -11,8 +11,8 @@
 //   - ModelScope URL fixup for Transformers.js compatibility
 //   - Long text chunking (splits at sentence boundaries, batch translate)
 
-import { env, type TranslationPipeline, type PipelineType } from '@huggingface/transformers'
-import { resolveEndpoint, type ResolvedEndpoint } from './connectivity.js'
+import { env, type PipelineType, type TranslationPipeline } from '@huggingface/transformers'
+import { type ResolvedEndpoint, resolveEndpoint } from './connectivity.js'
 
 // ============================================
 // Types
@@ -81,9 +81,7 @@ export class Translator {
     console.error(`[mcp-local-translate] ${this.endpointInfo.logLine}`)
 
     if (!this.endpointInfo.apiComplete) {
-      throw new Error(
-        `Cannot initialize translation model: ${this.endpointInfo.logLine}`
-      )
+      throw new Error(`Cannot initialize translation model: ${this.endpointInfo.logLine}`)
     }
 
     // Configure Transformers.js env
@@ -108,7 +106,7 @@ export class Translator {
     const isModelScope = this.endpointInfo.endpoint.includes('modelscope.cn')
     if (isModelScope) {
       const origFetch = env.fetch
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: fetch init type is complex and varies by platform
       env.fetch = async (url: unknown, init?: any) => {
         let urlStr = typeof url === 'string' ? url : String(url)
         urlStr = urlStr.replace(/(FilePath=)(\/)/g, '$1')
@@ -130,7 +128,12 @@ export class Translator {
       'translation' as PipelineType,
       'Xenova/nllb-200-distilled-600M',
       {
-        progress_callback: (info: { status: string; name?: string; file?: string; progress?: number }) => {
+        progress_callback: (info: {
+          status: string
+          name?: string
+          file?: string
+          progress?: number
+        }) => {
           if (info.status === 'progress' && info.file) {
             const pct = info.progress ? `${Math.round(info.progress)}%` : ''
             console.error(`[mcp-local-translate] Downloading ${info.file} ${pct}`)
@@ -192,9 +195,7 @@ export class Translator {
         translatedChunks.push(translated)
       }
       if (chunks.length > 1) {
-        console.error(
-          `[mcp-local-translate] Chunk ${i + 1}/${chunks.length} translated`
-        )
+        console.error(`[mcp-local-translate] Chunk ${i + 1}/${chunks.length} translated`)
       }
     }
 
