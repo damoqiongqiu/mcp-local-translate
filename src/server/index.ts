@@ -16,6 +16,7 @@ import {
   formatCandidates,
   getAllLanguages,
 } from '../translator/language-codes.js'
+import { detectLanguage } from '../translator/language-detect.js'
 import { TRANSLATE_TOOL, LIST_LANGUAGES_TOOL } from './types.js'
 
 // ============================================
@@ -106,8 +107,25 @@ export class TranslateServer {
       }
     }
 
-    // Resolve language codes
-    const sourceLang = resolveLanguageCode(sourceLangRaw)
+    // Resolve language codes (handle "auto" detection)
+    let sourceLang: string | undefined
+    if (sourceLangRaw.toLowerCase() === 'auto') {
+      const detected = detectLanguage(text)
+      if (!detected) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'Error: Could not auto-detect source language. The text may be too short or in an unsupported language. Please specify source_lang explicitly (e.g., "eng_Latn", "en", "English"). Use list_languages to see all supported languages.',
+            },
+          ],
+        }
+      }
+      sourceLang = detected
+      console.error(`[mcp-local-translate] Auto-detected source language: ${detected}`)
+    } else {
+      sourceLang = resolveLanguageCode(sourceLangRaw)
+    }
     if (!sourceLang) {
       const candidates = searchLanguage(sourceLangRaw)
       return {
