@@ -72,7 +72,32 @@ export class Translator {
   private async ensurePipeline(): Promise<TranslationPipeline> {
     if (this.pipeline_) return this.pipeline_
 
-    // Resolve endpoint (mirror chain auto-detection)
+    // ============================================
+    // Proxy auto-detection (Node.js 22+ undici compat)
+    // ============================================
+    //
+    // Node.js 22+ uses undici for the global fetch(), which does NOT
+    // respect HTTPS_PROXY/HTTP_PROXY env vars. We use
+    // setGlobalDispatcher() to make ALL fetch() calls (probes +
+    // Transformers.js downloads) route through the proxy automatically.
+    //
+    // Priority: config.proxyUrl > HTTPS_PROXY > HTTP_PROXY
+    const proxyUrl =
+      this.config.proxyUrl || process.env['HTTPS_PROXY'] || process.env['HTTP_PROXY']
+    if (proxyUrl) {
+      const { ProxyAgent, setGlobalDispatcher } = await import('undici')
+      setGlobalDispatcher(new ProxyAgent({ uri: proxyUrl, proxyTunnel: true }))
+      console.error(`[mcp-local-translate] Proxy configured: ${proxyUrl}`)
+    }
+
+    // --- HuggingFace endpoint resolution (auto-mirror detection) ---
+    //
+    // Priority:
+    //   1. config.hfEndpoint (explicit) → always wins, no auto-detect
+    //   2. config.autoMirror=false → use huggingface.co, no auto-detect
+    //   3. Auto-detect: walk mirror chain (huggingface.co → hf-mirror → modelscope)
+    //
+    // Probes use global fetch(), which is now proxy-aware via setGlobalDispatcher.
     const endpointOpts: { explicitEndpoint?: string; autoMirror?: boolean } = {}
     if (this.config.hfEndpoint) endpointOpts.explicitEndpoint = this.config.hfEndpoint
     if (this.config.autoMirror !== undefined) endpointOpts.autoMirror = this.config.autoMirror
@@ -91,14 +116,6 @@ export class Translator {
 
     if (this.config.cacheDir) {
       env.cacheDir = this.config.cacheDir
-    }
-
-    // Proxy-aware fetch: if proxy is set, create a custom fetch wrapper
-    if (this.config.proxyUrl) {
-      // undici is bundled with Node.js 22+
-      const { ProxyAgent, setGlobalDispatcher } = await import('undici')
-      setGlobalDispatcher(new ProxyAgent(this.config.proxyUrl))
-      console.error(`[mcp-local-translate] Proxy configured: ${this.config.proxyUrl}`)
     }
 
     // ModelScope URL fixup: Transformers.js prepends / to FilePath,

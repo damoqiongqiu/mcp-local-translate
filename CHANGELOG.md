@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.8] — 2026-07-11
+
+### Fixed
+- **Critical: proxy setup was after endpoint resolution**, causing `resolveEndpoint()` probes to bypass the proxy entirely. When a proxy is configured (e.g. `HTTPS_PROXY` for Chinese networks), the endpoint auto-detection now correctly routes through it — `huggingface.co` becomes reachable directly instead of falling back to incomplete mirrors. Also added `proxyTunnel: true` for consistent proxy behavior, and fallback to `HTTPS_PROXY`/`HTTP_PROXY` env vars (matching mcp-local-rag's approach).
+
 ## [0.1.0] — 2026-07-11
 
 ### Added
