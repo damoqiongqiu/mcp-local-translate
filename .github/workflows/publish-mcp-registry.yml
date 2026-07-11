@@ -20,6 +20,8 @@ jobs:
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
           echo "Publishing version: $VERSION"
+          # Sync version to both package.json and server.json
+          jq --arg v "$VERSION" '.version = $v' package.json > package.tmp && mv package.tmp package.json
           jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' server.json > server.tmp && mv server.tmp server.json
 
       - name: Set up Node.js
