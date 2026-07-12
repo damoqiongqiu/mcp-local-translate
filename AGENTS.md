@@ -132,17 +132,21 @@ class Translator {
 
 ## 提交 PR 之前
 
-运行完整 CI 流水线：
+**🚨 强制要求 — 不满足以下条件不得提交：**
 
-```bash
-pnpm run type-check    # TypeScript 检查
-pnpm run build         # 编译
-pnpm test              # 测试
-pnpm run check:fix     # Lint + 格式化
-```
+1. **为新功能写用例测试**：每项新功能必须有对应的测试用例，覆盖正常路径和边界情况
+2. **跑回归测试**：确保修改没有破坏已有功能 — 跑完整测试套件：
+   ```bash
+   pnpm test
+   ```
+3. **检查通过后提交**：
+   ```bash
+   pnpm run type-check    # TypeScript 检查
+   pnpm run build         # 编译
+   pnpm run check:fix     # Lint + 格式化
+   ```
 
 同时注意：
-- 为新功能和 bug 修复添加测试
 - 如果行为有变化，更新文档
 - 保持 commit 聚焦 — 每个 PR 一个逻辑变更
 
