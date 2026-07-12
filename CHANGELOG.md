@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.11] — 2026-07-12
+
+### Fixed
+- **Fuzzy fallback regex too strict**: The fuzzy restore pattern `\[GLO(\d+)\]` required both square brackets, but SentencePiece tokenizer could mangle only one side (e.g. `[GLO0` without closing bracket). Changed to `\[?GLO(\d+)\]?` — both brackets are now optional in the fallback path.
+
+### Added
+- **22 new unit tests**: LRU cache (8), glossary injection/restore with fuzzy fallback (6), batch translation (3), status/cacheStats (5). Total test count: 57, all passing.
+- **Commit discipline rule** in AGENTS.md: new features must have test cases + regression tests must pass before committing.
+
 ## [0.1.10] — 2026-07-12
 
 ### Fixed
