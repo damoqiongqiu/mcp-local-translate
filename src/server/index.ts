@@ -20,12 +20,7 @@ import {
   searchLanguage,
 } from '../translator/language-codes.js'
 import { detectLanguage } from '../translator/language-detect.js'
-import {
-  LIST_LANGUAGES_TOOL,
-  STATUS_TOOL,
-  TRANSLATE_BATCH_TOOL,
-  TRANSLATE_TOOL,
-} from './types.js'
+import { LIST_LANGUAGES_TOOL, STATUS_TOOL, TRANSLATE_BATCH_TOOL, TRANSLATE_TOOL } from './types.js'
 
 // Read version from package.json (works in both dev and dist)
 const require = createRequire(import.meta.url)
@@ -95,7 +90,7 @@ export class TranslateServer {
 
       // Dynamic translation resource: translate://{sourceLang}%E2%86%92{targetLang}?text={text}
       const match = uri.match(/^translate:\/\/(.+?)%E2%86%92(.+?)\?text=(.+)$/)
-      if (match && match[1] && match[2] && match[3]) {
+      if (match?.[1] && match[2] && match[3]) {
         const [, srcRaw, tgtRaw, encodedText] = match
         const text = decodeURIComponent(encodedText)
         const sourceLang = resolveLanguageCode(decodeURIComponent(srcRaw))
@@ -245,9 +240,7 @@ export class TranslateServer {
       ]
 
       if (glossary && Object.keys(glossary).length > 0) {
-        lines.push(
-          `Glossary: ${Object.keys(glossary).length} term(s) applied`
-        )
+        lines.push(`Glossary: ${Object.keys(glossary).length} term(s) applied`)
       }
 
       return {
@@ -344,9 +337,7 @@ export class TranslateServer {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       return {
-        content: [
-          { type: 'text', text: `Batch translation failed: ${errorMessage}` },
-        ],
+        content: [{ type: 'text', text: `Batch translation failed: ${errorMessage}` }],
       }
     }
   }
@@ -358,9 +349,7 @@ export class TranslateServer {
     content: Array<{ type: 'text'; text: string }>
   } {
     const status = this.translator.getStatus()
-    const lines = [
-      `Translation Engine Status: ${status.state}`,
-    ]
+    const lines = [`Translation Engine Status: ${status.state}`]
 
     if (status.progress?.file) {
       const pct = status.progress.pct !== undefined ? ` (${status.progress.pct}%)` : ''

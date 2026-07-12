@@ -74,15 +74,19 @@ export interface BatchTranslateOutput {
 
 export interface TranslationStatus {
   state: 'uninitialized' | 'downloading' | 'ready' | 'error'
-  progress?: {
-    file?: string | undefined
-    pct?: number | undefined
-  } | undefined
+  progress?:
+    | {
+        file?: string | undefined
+        pct?: number | undefined
+      }
+    | undefined
   endpointLog?: string | undefined
-  cacheStats?: {
-    size: number
-    maxSize: number
-  } | undefined
+  cacheStats?:
+    | {
+        size: number
+        maxSize: number
+      }
+    | undefined
 }
 
 /** Maximum characters per batch chunk (NLLB has ~512 token context window) */
@@ -178,8 +182,7 @@ export class Translator {
     // Transformers.js downloads) route through the proxy automatically.
     //
     // Priority: config.proxyUrl > HTTPS_PROXY > HTTP_PROXY
-    const proxyUrl =
-      this.config.proxyUrl || process.env['HTTPS_PROXY'] || process.env['HTTP_PROXY']
+    const proxyUrl = this.config.proxyUrl || process.env['HTTPS_PROXY'] || process.env['HTTP_PROXY']
     if (proxyUrl) {
       const { ProxyAgent, setGlobalDispatcher } = await import('undici')
       setGlobalDispatcher(new ProxyAgent({ uri: proxyUrl, proxyTunnel: true }))
@@ -339,9 +342,7 @@ export class Translator {
 
     // For long texts, split at sentence boundaries and translate in parallel
     const chunks = this.splitText(preparedText)
-    console.error(
-      `[mcp-local-translate] Translating ${chunks.length} chunks in parallel`
-    )
+    console.error(`[mcp-local-translate] Translating ${chunks.length} chunks in parallel`)
 
     const translatedChunks = await Promise.all(
       chunks.map(async (chunk, i) => {

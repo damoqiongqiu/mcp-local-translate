@@ -57,8 +57,7 @@ export const TRANSLATE_BATCH_TOOL: Tool = {
       },
       glossary: {
         type: 'object',
-        description:
-          'Optional term mapping applied to all texts in the batch.',
+        description: 'Optional term mapping applied to all texts in the batch.',
       },
     },
     required: ['texts', 'source_lang', 'target_lang'],
