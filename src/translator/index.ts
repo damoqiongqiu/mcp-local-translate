@@ -337,9 +337,13 @@ export class Translator {
           finalText = finalText.replace(exactRegex, targetTerm)
         } else {
           // Fuzzy fallback: tokenizer might have mangled the placeholder.
-          // Look for anything matching the [GLO{N}] pattern loosely.
+          // Look for anything matching the [GLO{N}] pattern loosely — brackets optional.
           const fuzzyRegex = new RegExp(
-            placeholder.replace(/[[\]]/g, '\\$&').replace(/\d+/, '(\\d+)'),
+            placeholder
+              .replace(/[[\]]/g, '\\$&')
+              .replace(/\\\[/, '\\[?')
+              .replace(/\\\]/, '\\]?')
+              .replace(/\d+/, '(\\d+)'),
             'g'
           )
           finalText = finalText.replace(fuzzyRegex, (_match, num) =>
@@ -380,7 +384,11 @@ export class Translator {
         joinedText = joinedText.replace(exactRegex, targetTerm)
       } else {
         const fuzzyRegex = new RegExp(
-          placeholder.replace(/[[\]]/g, '\\$&').replace(/\d+/, '(\\d+)'),
+          placeholder
+            .replace(/[[\]]/g, '\\$&')
+            .replace(/\\\[/, '\\[?')
+            .replace(/\\\]/, '\\]?')
+            .replace(/\d+/, '(\\d+)'),
           'g'
         )
         joinedText = joinedText.replace(fuzzyRegex, (_match, num) =>
