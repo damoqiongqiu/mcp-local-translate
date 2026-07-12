@@ -310,7 +310,9 @@ export class Translator {
     if (glossaryEntries.length > 0) {
       let idx = 0
       for (const [sourceTerm, targetTerm] of glossaryEntries) {
-        const placeholder = `__GLO${idx}__`
+        // Use [GLO{N}] format — square brackets are tokenized atomically
+        // by BPE tokenizers (unlike __ which SentencePiece treats as spaces)
+        const placeholder = `[GLO${idx}]`
         // Escape special regex chars in the term
         const escaped = sourceTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         const regex = new RegExp(escaped, 'g')
@@ -324,10 +326,26 @@ export class Translator {
     if (preparedText.length <= MAX_CHUNK_LENGTH) {
       const result = await this.translateSingle(preparedText, srcLang, tgtLang, pipeline)
 
-      // Restore glossary placeholders in the output
+      // Restore glossary placeholders in the output.
+      // Exact match first, then fuzzy fallback for tokenizer mangling.
       let finalText = result
       for (const [placeholder, targetTerm] of placeholders) {
-        finalText = finalText.replace(new RegExp(placeholder, 'g'), targetTerm)
+        // placeholder format: [GLO{N}]
+        // Escape brackets for regex
+        const exactRegex = new RegExp(placeholder.replace(/[[\]]/g, '\\$&'), 'g')
+        if (exactRegex.test(finalText)) {
+          finalText = finalText.replace(exactRegex, targetTerm)
+        } else {
+          // Fuzzy fallback: tokenizer might have mangled the placeholder.
+          // Look for anything matching the [GLO{N}] pattern loosely.
+          const fuzzyRegex = new RegExp(
+            placeholder.replace(/[[\]]/g, '\\$&').replace(/\d+/, '(\\d+)'),
+            'g'
+          )
+          finalText = finalText.replace(fuzzyRegex, (_match, num) =>
+            num !== undefined ? (placeholders.get(`[GLO${num}]`) ?? _match) : _match
+          )
+        }
       }
 
       const durationMs = Math.round(performance.now() - startTime)
@@ -355,9 +373,20 @@ export class Translator {
 
     let joinedText = translatedChunks.join('\n')
 
-    // Restore glossary placeholders
+    // Restore glossary placeholders with fuzzy fallback
     for (const [placeholder, targetTerm] of placeholders) {
-      joinedText = joinedText.replace(new RegExp(placeholder, 'g'), targetTerm)
+      const exactRegex = new RegExp(placeholder.replace(/[[\]]/g, '\\$&'), 'g')
+      if (exactRegex.test(joinedText)) {
+        joinedText = joinedText.replace(exactRegex, targetTerm)
+      } else {
+        const fuzzyRegex = new RegExp(
+          placeholder.replace(/[[\]]/g, '\\$&').replace(/\d+/, '(\\d+)'),
+          'g'
+        )
+        joinedText = joinedText.replace(fuzzyRegex, (_match, num) =>
+          num !== undefined ? (placeholders.get(`[GLO${num}]`) ?? _match) : _match
+        )
+      }
     }
 
     const durationMs = Math.round(performance.now() - startTime)
