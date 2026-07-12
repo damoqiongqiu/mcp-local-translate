@@ -1,6 +1,6 @@
 {
   "name": "@damoqiongqiu/mcp-local-translate",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Zero-dependency local translation engine via Transformers.js NLLB model — translate text across 200+ languages, CPU-only, no cloud APIs, everything stays on your machine.",
   "type": "module",
   "main": "dist/index.js",

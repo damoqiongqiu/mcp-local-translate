@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.10] — 2026-07-12
+
+### Fixed
+- **Glossary placeholder mangling by NLLB SentencePiece tokenizer**: The `__GLO{N}__` format used double underscores, which SentencePiece interprets as space markers. During BPE encode-decode, consecutive underscores were collapsed, producing `_GLO{N}__` instead of `__GLO{N}__` — causing the restore regex to miss and leaving raw placeholder fragments in the output. Changed to `[GLO{N}]` format using square brackets, which survive BPE tokenization as individual tokens. Added fuzzy fallback restore logic to catch any edge cases where the model might still alter the placeholder.
+
 ## [0.1.9] — 2026-07-11
 
 ### Added
