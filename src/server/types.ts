@@ -23,8 +23,55 @@ export const TRANSLATE_TOOL: Tool = {
         description:
           'Target language code (FLORES-200, ISO 639-1, or language name). Examples: "zho_Hans", "zh", "中文", "eng_Latn", "en", "English".',
       },
+      glossary: {
+        type: 'object',
+        description:
+          'Optional term mapping for consistent translation of domain-specific vocabulary. Keys are source terms, values are their fixed translations. Example: {"Transformer": "transformer", "embedding": "嵌入"}. Terms are replaced with placeholders before translation and restored afterwards.',
+      },
     },
     required: ['text', 'source_lang', 'target_lang'],
+  },
+}
+
+export const TRANSLATE_BATCH_TOOL: Tool = {
+  name: 'translate_batch',
+  description:
+    'Translate multiple texts at once with a single model pipeline invocation. Much faster than calling translate repeatedly for batch workloads. All texts must share the same source and target languages.',
+  inputSchema: {
+    type: 'object' as const,
+    properties: {
+      texts: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Array of text strings to translate',
+      },
+      source_lang: {
+        type: 'string',
+        description:
+          'Source language code (same format as translate tool). All texts share this source language.',
+      },
+      target_lang: {
+        type: 'string',
+        description:
+          'Target language code (same format as translate tool). All texts share this target language.',
+      },
+      glossary: {
+        type: 'object',
+        description:
+          'Optional term mapping applied to all texts in the batch.',
+      },
+    },
+    required: ['texts', 'source_lang', 'target_lang'],
+  },
+}
+
+export const STATUS_TOOL: Tool = {
+  name: 'status',
+  description:
+    'Check the current status of the translation engine. Returns model readiness, download progress, and endpoint connectivity info. Useful before calling translate to avoid timeouts during model download.',
+  inputSchema: {
+    type: 'object' as const,
+    properties: {},
   },
 }
 

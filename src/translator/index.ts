@@ -3,13 +3,17 @@
 // ============================================
 //
 // Uses Transformers.js pipeline with Xenova/nllb-200-distilled-600M.
-// The model is ~600MB and translates 200+ languages with CPU-only inference.
+// The model is ~600M params (~3.5GB on disk) and translates 200+ languages with CPU-only inference.
 //
 // Features:
 //   - Lazy model loading (only on first translate() call)
 //   - Proxy-aware fetch for Chinese networks
 //   - ModelScope URL fixup for Transformers.js compatibility
-//   - Long text chunking (splits at sentence boundaries, batch translate)
+//   - Long text chunking (splits at sentence boundaries, parallel translate)
+//   - LRU translation cache (same text+lang pairs skip re-translation)
+//   - Glossary support for domain-specific terminology
+//   - Batch translation for multi-text workloads
+//   - Download progress tracking for status reporting
 
 import { env, type PipelineType, type TranslationPipeline } from '@huggingface/transformers'
 import { type ResolvedEndpoint, resolveEndpoint } from './connectivity.js'
@@ -29,12 +33,16 @@ export interface TranslatorConfig {
   proxyUrl?: string
   /** Device type ('cpu' or 'webgpu') */
   device?: string
+  /** Maximum LRU cache size (default: 1000) */
+  maxCacheSize?: number
 }
 
 export interface TranslateInput {
   text: string
   sourceLang: string
   targetLang: string
+  /** Optional term mapping for glossary-based translation */
+  glossary?: Record<string, string>
 }
 
 export interface TranslateOutput {
@@ -43,6 +51,38 @@ export interface TranslateOutput {
   targetLang: string
   /** Time taken in milliseconds */
   durationMs: number
+  /** Whether result came from cache */
+  fromCache?: boolean
+}
+
+export interface BatchTranslateInput {
+  texts: string[]
+  sourceLang: string
+  targetLang: string
+  glossary?: Record<string, string>
+}
+
+export interface BatchTranslateOutput {
+  translations: Array<{
+    text: string
+    translatedText: string
+  }>
+  sourceLang: string
+  targetLang: string
+  durationMs: number
+}
+
+export interface TranslationStatus {
+  state: 'uninitialized' | 'downloading' | 'ready' | 'error'
+  progress?: {
+    file?: string | undefined
+    pct?: number | undefined
+  } | undefined
+  endpointLog?: string | undefined
+  cacheStats?: {
+    size: number
+    maxSize: number
+  } | undefined
 }
 
 /** Maximum characters per batch chunk (NLLB has ~512 token context window) */
@@ -50,6 +90,58 @@ const MAX_CHUNK_LENGTH = 450
 
 /** Sentence boundary regex for smart splitting */
 const SENTENCE_BOUNDARY = /(?<=[.!?。！？\n])\s+/
+
+// ============================================
+// LRU Cache
+// ============================================
+
+interface CacheEntry {
+  text: string
+  sourceLang: string
+  targetLang: string
+  result: string
+}
+
+class LRUCache {
+  private map = new Map<string, CacheEntry>()
+  private maxSize: number
+
+  constructor(maxSize = 1000) {
+    this.maxSize = maxSize
+  }
+
+  private makeKey(text: string, src: string, tgt: string): string {
+    return `${src}|${tgt}|${text}`
+  }
+
+  get(text: string, src: string, tgt: string): string | null {
+    const key = this.makeKey(text, src, tgt)
+    const entry = this.map.get(key)
+    if (!entry) return null
+    // Move to end (most recently used)
+    this.map.delete(key)
+    this.map.set(key, entry)
+    return entry.result
+  }
+
+  set(text: string, src: string, tgt: string, result: string): void {
+    const key = this.makeKey(text, src, tgt)
+    // Evict oldest if at capacity
+    if (this.map.size >= this.maxSize) {
+      const oldest = this.map.keys().next().value
+      if (oldest) this.map.delete(oldest)
+    }
+    this.map.set(key, { text, sourceLang: src, targetLang: tgt, result })
+  }
+
+  get size(): number {
+    return this.map.size
+  }
+
+  get maxSizeLimit(): number {
+    return this.maxSize
+  }
+}
 
 // ============================================
 // Translator Class
@@ -60,9 +152,13 @@ export class Translator {
   private config: TranslatorConfig
   private endpointInfo: ResolvedEndpoint | null = null
   private initialized = false
+  private cache: LRUCache
+  private downloadProgress: { file?: string | undefined; pct?: number | undefined } = {}
+  private downloadError: string | null = null
 
   constructor(config: TranslatorConfig = {}) {
     this.config = config
+    this.cache = new LRUCache(config.maxCacheSize ?? 1000)
   }
 
   /**
@@ -152,14 +248,16 @@ export class Translator {
           progress?: number
         }) => {
           if (info.status === 'progress' && info.file) {
-            const pct = info.progress ? `${Math.round(info.progress)}%` : ''
-            console.error(`[mcp-local-translate] Downloading ${info.file} ${pct}`)
+            const pct = info.progress ? Math.round(info.progress) : undefined
+            this.downloadProgress = { file: info.file, pct }
+            console.error(`[mcp-local-translate] Downloading ${info.file} ${pct ?? ''}%`)
           }
         },
       }
     )) as TranslationPipeline
 
     this.initialized = true
+    this.downloadProgress = {}
     console.error('[mcp-local-translate] Model loaded successfully')
     return this.pipeline_
   }
@@ -168,14 +266,10 @@ export class Translator {
    * Translate text from source language to target language.
    *
    * For long texts (>MAX_CHUNK_LENGTH chars), splits at sentence boundaries
-   * and translates each chunk separately, then joins.
+   * and translates chunks in parallel, then joins.
+   * Results are cached via LRU for repeated calls.
    */
   async translate(input: TranslateInput): Promise<TranslateOutput> {
-    const startTime = performance.now()
-
-    const pipeline = await this.ensurePipeline()
-
-    // Normalize language codes
     const srcLang = input.sourceLang.trim()
     const tgtLang = input.targetLang.trim()
     const text = input.text.trim()
@@ -189,40 +283,133 @@ export class Translator {
       }
     }
 
-    // For short texts, translate directly
-    if (text.length <= MAX_CHUNK_LENGTH) {
-      const result = await this.translateSingle(text, srcLang, tgtLang, pipeline)
-      const durationMs = Math.round(performance.now() - startTime)
+    // Check cache
+    const cached = this.cache.get(text, srcLang, tgtLang)
+    if (cached !== null) {
       return {
-        translatedText: result,
+        translatedText: cached,
+        sourceLang: srcLang,
+        targetLang: tgtLang,
+        durationMs: 0,
+        fromCache: true,
+      }
+    }
+
+    const startTime = performance.now()
+    const pipeline = await this.ensurePipeline()
+
+    // Apply glossary before translation: replace source terms with placeholders
+    const glossary = input.glossary ?? {}
+    const glossaryEntries = Object.entries(glossary)
+    const placeholders = new Map<string, string>() // placeholder → targetTranslation
+    let preparedText = text
+
+    if (glossaryEntries.length > 0) {
+      let idx = 0
+      for (const [sourceTerm, targetTerm] of glossaryEntries) {
+        const placeholder = `__GLO${idx}__`
+        // Escape special regex chars in the term
+        const escaped = sourceTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const regex = new RegExp(escaped, 'g')
+        preparedText = preparedText.replace(regex, placeholder)
+        placeholders.set(placeholder, targetTerm)
+        idx++
+      }
+    }
+
+    // For short texts, translate directly
+    if (preparedText.length <= MAX_CHUNK_LENGTH) {
+      const result = await this.translateSingle(preparedText, srcLang, tgtLang, pipeline)
+
+      // Restore glossary placeholders in the output
+      let finalText = result
+      for (const [placeholder, targetTerm] of placeholders) {
+        finalText = finalText.replace(new RegExp(placeholder, 'g'), targetTerm)
+      }
+
+      const durationMs = Math.round(performance.now() - startTime)
+      this.cache.set(text, srcLang, tgtLang, finalText)
+      return {
+        translatedText: finalText,
         sourceLang: srcLang,
         targetLang: tgtLang,
         durationMs,
       }
     }
 
-    // For long texts, split at sentence boundaries
-    const chunks = this.splitText(text)
-    const translatedChunks: string[] = []
+    // For long texts, split at sentence boundaries and translate in parallel
+    const chunks = this.splitText(preparedText)
+    console.error(
+      `[mcp-local-translate] Translating ${chunks.length} chunks in parallel`
+    )
 
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i]!
-      if (chunk.trim()) {
+    const translatedChunks = await Promise.all(
+      chunks.map(async (chunk, i) => {
+        if (!chunk.trim()) return ''
         const translated = await this.translateSingle(chunk, srcLang, tgtLang, pipeline)
-        translatedChunks.push(translated)
-      }
-      if (chunks.length > 1) {
-        console.error(`[mcp-local-translate] Chunk ${i + 1}/${chunks.length} translated`)
-      }
+        console.error(`[mcp-local-translate] Chunk ${i + 1}/${chunks.length} done`)
+        return translated
+      })
+    )
+
+    let joinedText = translatedChunks.join('\n')
+
+    // Restore glossary placeholders
+    for (const [placeholder, targetTerm] of placeholders) {
+      joinedText = joinedText.replace(new RegExp(placeholder, 'g'), targetTerm)
     }
 
     const durationMs = Math.round(performance.now() - startTime)
     console.error(
-      `[mcp-local-translate] Translation complete in ${durationMs}ms (${chunks.length} chunks)`
+      `[mcp-local-translate] Translation complete in ${durationMs}ms (${chunks.length} chunks parallel)`
     )
 
+    this.cache.set(text, srcLang, tgtLang, joinedText)
     return {
-      translatedText: translatedChunks.join('\n'),
+      translatedText: joinedText,
+      sourceLang: srcLang,
+      targetLang: tgtLang,
+      durationMs,
+    }
+  }
+
+  /**
+   * Batch translate multiple texts sharing the same source/target languages.
+   * Reuses a single pipeline load and cache for maximum throughput.
+   */
+  async translateBatch(input: BatchTranslateInput): Promise<BatchTranslateOutput> {
+    const { texts, sourceLang, targetLang, glossary } = input
+    const srcLang = sourceLang.trim()
+    const tgtLang = targetLang.trim()
+
+    if (texts.length === 0) {
+      return {
+        translations: [],
+        sourceLang: srcLang,
+        targetLang: tgtLang,
+        durationMs: 0,
+      }
+    }
+
+    const startTime = performance.now()
+
+    // Translate each text (individual results get cached too)
+    const results = await Promise.all(
+      texts.map(async (t) => {
+        const input: TranslateInput = {
+          text: t,
+          sourceLang: srcLang,
+          targetLang: tgtLang,
+        }
+        if (glossary) input.glossary = glossary
+        const result = await this.translate(input)
+        return { text: t, translatedText: result.translatedText }
+      })
+    )
+
+    const durationMs = Math.round(performance.now() - startTime)
+    return {
+      translations: results,
       sourceLang: srcLang,
       targetLang: tgtLang,
       durationMs,
@@ -282,6 +469,41 @@ export class Translator {
 
     if (currentChunk) chunks.push(currentChunk)
     return chunks.length > 0 ? chunks : [text]
+  }
+
+  /**
+   * Get current translation engine status.
+   */
+  getStatus(): TranslationStatus {
+    if (this.initialized) {
+      return {
+        state: 'ready',
+        endpointLog: this.endpointInfo?.logLine,
+        cacheStats: {
+          size: this.cache.size,
+          maxSize: this.cache.maxSizeLimit,
+        },
+      }
+    }
+
+    if (this.downloadError) {
+      return {
+        state: 'error',
+        endpointLog: this.downloadError,
+      }
+    }
+
+    if (Object.keys(this.downloadProgress).length > 0) {
+      return {
+        state: 'downloading',
+        progress: { ...this.downloadProgress },
+        endpointLog: this.endpointInfo?.logLine,
+      }
+    }
+
+    return {
+      state: 'uninitialized',
+    }
   }
 
   /**
